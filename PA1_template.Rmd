@@ -8,18 +8,96 @@ output:
 
 ## Loading and preprocessing the data
 
+```{r}
+#loading the data
+setwd("~/GitHub/RepData_PeerAssessment1")
+activity_data <- read.csv(file = unz("activity.zip", "activity.csv"), stringsAsFactors = FALSE)
 
+
+library(dplyr)
+#add column with full timestamp
+activity_data <- mutate(activity_data, timestamp = as.POSIXlt(date) + (60 * interval))
+```
 
 ## What is mean total number of steps taken per day?
 
-
+```{r}
+library(data.table)
+DT <- data.table(activity_data)
+steps_taken <- DT[,sum(steps), by = date]
+steps_taken
+```
+```{r}
+hist(steps_taken$V1)
+title("Histogramm of steps taken per day")
+```
+```{r}
+# mean steps
+mean_steps <- mean(na.omit(steps_taken$V1))
+# median steps
+median_steps <- median(na.omit(steps_taken$V1))
+```
+The mean of total number of steps per day is: `r mean_steps`  
+The median of total numer of steps per day is : `r median_steps`
 
 ## What is the average daily activity pattern?
 
-
+```{r}
+avg_steps_taken <- DT[,mean(na.omit(steps)), by = interval]
+plot(avg_steps_taken$interval, avg_steps_taken$V1, type = "l", xlab = "interval", ylab = "avg steps taken")
+title("Average daily activity pattern")
+```
+```{r}
+avg_steps_taken[max(avg_steps_taken$V1),]$interval
+```
 
 ## Imputing missing values
 
+```{r}
+nrow(activity_data[is.na(activity_data$steps),])
+```
 
+```{r}
+fill_missing_values <- function(activity_data){
+        activity_data_without_na <- activity_data
+        for(i in 1:nrow(activity_data)){
+                if(is.na(activity_data[i,]$steps)){
+                        activity_data_without_na[i,]$steps = 
+                                round(avg_steps_taken[avg_steps_taken$interval == activity_data[i,]$interval,]$V1)
+                }
+        }
+        activity_data_without_na
+}
+```
+
+```{r}
+activity_data_without_missing_values <- fill_missing_values(activity_data)
+```
+
+```{r}
+DT_without_na <- data.table(activity_data_without_missing_values)
+steps_taken_without_na <- DT_without_na[,sum(steps), by = date]
+steps_taken_without_na
+
+hist(steps_taken_without_na$V1)
+
+mean_steps_without_na <- mean(na.omit(steps_taken_without_na$V1))
+median_steps_without_na <- median(na.omit(steps_taken_without_na$V1))
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+```{r}
+#create a vector of weekdays (Here I used german names beacause my RStudio ist cofigured for Germany)
+weekdays <- c('Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag')
+#mutate data frame with new factor variable weekdays to 
+activity_data_without_missing_values <- mutate(activity_data_without_missing_values, day_in_week = factor((weekdays(as.Date(activity_data_without_missing_values$date)) %in% weekdays), 
+         levels=c(FALSE, TRUE), labels=c('weekend', 'weekday')))
+```
+
+```{r}
+library(Hmisc)
+
+steps_per_day <- aggregate(steps ~ interval + day_in_week, data = activity_data_without_missing_values, mean)
+xyplot(steps ~ interval | day_in_week, steps_per_day, type = "l", layout = c(1, 2), 
+    xlab = "Interval", ylab = "avg Number of steps")
+```
